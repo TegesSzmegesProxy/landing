@@ -5,9 +5,11 @@ import type {
   IncomingRow,
   NavItem,
   PolicyPoint,
+  PricingTier,
   RequestSample,
   Step,
   TerminalLine,
+  Verdict,
   VerdictRow,
 } from '../types';
 
@@ -15,14 +17,13 @@ export const WORDMARK = 'TESSERA';
 
 export const header = {
   nav: [
-    { label: 'Product', href: '#top' },
     { label: 'How it works', href: '#how-it-works' },
     { label: 'Policies', href: '#policies' },
+    { label: 'JEV', href: '#jev' },
+    { label: 'Pricing', href: '#pricing' },
     { label: 'Docs' },
-    { label: 'Pricing' },
   ] satisfies NavItem[],
-  signIn: 'Sign in',
-  deploy: 'Deploy',
+  deploy: 'Demo',
   menu: 'Menu',
   closeMenu: 'Close menu',
 };
@@ -135,6 +136,83 @@ export const policy = {
   ] satisfies TerminalLine[],
 };
 
+export const jev = {
+  eyebrow: 'JEV',
+  title: 'JEV only reads the requests that need it.',
+  body: "JEV is Tessera's AI decision layer. Static analysis settles almost every request in under a millisecond; the few it cannot settle go to JEV, which returns a maliciousness score and the context behind it.",
+  points: [
+    { title: 'Called on suspicion', description: 'Only requests a static check flags reach JEV. That is about 1% of traffic.' },
+    { title: 'A score with reasons', description: 'Every verdict carries a maliciousness score and what triggered it.' },
+    { title: 'Your keys or ours', description: 'Bring your own model keys on Open core, or use JEV hosted by Tessera.' },
+  ] satisfies PolicyPoint[],
+  more: { label: 'Why JEV costs so little', href: 'https://typesafe.ai' },
+  sampleLabel: 'Every 100 requests',
+  sampleMeta: '≈ 1 reaches JEV',
+  /** index of the one tile routed to JEV in the 20 × 5 mosaic */
+  jevTile: 47,
+  legend: [
+    { label: 'Static analysis', count: '99', detail: '0.4 ms median' },
+  ],
+};
+
+export const pricing = {
+  eyebrow: 'Pricing',
+  title: 'Run it yourself, or let Tessera run it.',
+  body: "Open core is free and self-hosted. Paid plans move the proxy, code analysis and JEV onto Tessera's infrastructure.",
+  billingLabel: 'Billing period',
+  billing: { monthly: 'Monthly', yearly: 'Yearly' },
+  perMonth: '/ month',
+  billedMonthly: 'Billed monthly',
+  billedYearly: 'billed yearly',
+  custom: 'Custom',
+  featuredLabel: 'Recommended',
+  tiers: [
+    {
+      name: 'Open core',
+      blurb: 'For teams that run their own infrastructure.',
+      price: { monthly: 0, yearly: 0 },
+      note: 'Free forever · self-hosted',
+      cta: 'Read the setup guide',
+      features: [
+        'Reverse proxy and static analysis',
+        'Policies generated locally with the CLI',
+        'JEV with your own model keys',
+        'You host, update and scale it',
+      ],
+    },
+    {
+      name: 'Hosted',
+      blurb: 'For one application, run by Tessera.',
+      // ponytail: yearly rate is a placeholder (two months free) — set the real one
+      price: { monthly: 29.99, yearly: 24.99 },
+      cta: 'Deploy Tessera',
+      deploy: true,
+      featured: true,
+      features: [
+        'Proxy hosted by Tessera, nothing to run',
+        'Code analysis runs for you',
+        'JEV included, no keys to manage',
+        'More requests analysed by JEV',
+        'Sampling and analysis depth settings',
+      ],
+    },
+    {
+      name: 'Company',
+      blurb: 'For organisations with their own models.',
+      price: null,
+      note: 'Priced on volume',
+      cta: 'Contact sales',
+      features: [
+        'Everything in Hosted',
+        'Your own policies, written by your AI with Tessera skills',
+        'Platform managed for you by Tessera',
+        'Highest sampling volumes',
+        'Every check and threshold configurable',
+      ],
+    },
+  ] satisfies PricingTier[],
+};
+
 export const bento = {
   eyebrow: 'Dashboard',
   title: 'Analysis goes where the attacks are.',
@@ -158,13 +236,17 @@ export const bento = {
 };
 
 export const footer = {
-  title: 'Put a gate in front of your app this afternoon.',
-  cta: 'Deploy Tessera',
-  tagline: '© 2026 · Admit one.',
+  eyebrow: 'Demo',
+  title: 'Play with our simple demo.',
+  body: 'Pick a request and send it through the gate. Tessera scores it and hands back a ticket, the same way it would in front of your app.',
+  cta: 'Try the demo',
+  playLabel: 'Send a request',
+  verdicts: { passed: 'Request admitted', blocked: 'Request dropped', jev: 'Sent to JEV', review: 'Held for review' } satisfies Record<Verdict, string>,
+  tagline: '© 2026',
   columns: [
     { heading: 'Product', links: ['How it works', 'Policies', 'JEV', 'Pricing'] },
-    { heading: 'Developers', links: ['Docs', 'CLI', 'Changelog', 'Status'] },
-    { heading: 'Company', links: ['About', 'Security', 'Contact'] },
+    { heading: 'Developers', links: ['Docs'] },
+    { heading: 'Company', links: ['Contact'] },
   ] satisfies FooterColumn[],
 };
 

@@ -58,3 +58,19 @@ export interface NavItem {
   /** in-page anchor; items without one render as buttons */
   href?: string;
 }
+
+export type Billing = 'monthly' | 'yearly';
+
+export interface PricingTier {
+  name: string;
+  blurb: string;
+  /** USD per month for each billing period; null = quoted per contract */
+  price: Record<Billing, number> | null;
+  /** replaces the billing line when the price does not depend on the period */
+  note?: string;
+  cta: string;
+  /** opens the Deploy dialog */
+  deploy?: boolean;
+  featured?: boolean;
+  features: string[];
+}

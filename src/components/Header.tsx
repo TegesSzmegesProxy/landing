@@ -7,7 +7,7 @@ import { IconButton } from './ui/IconButton';
 import { NavPill } from './ui/NavPill';
 
 export function Header({ onDeploy }: { onDeploy: () => void }) {
-  const [active, setActive] = useState('Product');
+  const [active, setActive] = useState('');
   const [open, setOpen] = useState(false);
   const sheetId = useId();
 
@@ -29,7 +29,7 @@ export function Header({ onDeploy }: { onDeploy: () => void }) {
   };
 
   return (
-    <header className="sticky top-0 z-20 grid grid-cols-[1fr_auto_1fr] items-center py-4 px-10 max-md:px-6 bg-[linear-gradient(var(--bone-100)_60%,rgba(241,235,224,0))]">
+    <header className="sticky top-0 z-20 grid grid-cols-[1fr_auto_1fr] items-center py-3 px-10 max-md:px-6 bg-[rgba(241,235,224,.82)] backdrop-blur-[14px] saturate-110 border-b border-(--border-subtle)">
       <a href="#top" className="font-sans text-[15px] leading-[normal] font-medium tracking-[.18em] text-ink-900 no-underline hover:text-ink-900">
         {WORDMARK}
       </a>
@@ -38,9 +38,6 @@ export function Header({ onDeploy }: { onDeploy: () => void }) {
       <span className="md:hidden" />
 
       <div className="flex justify-end items-center gap-2">
-        <Button variant="ghost" size="sm" className="max-md:hidden">
-          {header.signIn}
-        </Button>
         <Button variant="secondary" size="sm" onClick={onDeploy}>
           {header.deploy}
         </Button>
