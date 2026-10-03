@@ -23,17 +23,14 @@ export const header = {
     { label: 'Pricing', href: '#pricing' },
     { label: 'Docs' },
   ] satisfies NavItem[],
-  deploy: 'Deploy',
-  menu: 'Menu',
   closeMenu: 'Close menu',
 };
 
 export const hero = {
   eyebrow: 'Adaptive security layer · reverse proxy',
-  title: 'Application-specific protection without the runtime overhead.',
+  title: 'Application-specific protection with minimal runtime overhead',
   body: 'Tessera sits between your application and the rest of the world. It writes its policy from your code, checks every request, and asks JEV only when something looks wrong.',
   primary: 'Deploy Tessera',
-  secondary: 'Trace a request',
   gateLabel: 'Gate · live',
   samples: [
     { method: 'GET', path: '/api/orders', status: 'passed', score: 0.03 },
@@ -55,7 +52,7 @@ export const flow = {
       numeral: 'II',
       title: 'Check',
       body: 'A static-analysis toolchain validates magic bytes, schemas and known injection shapes against the policy for that route.',
-      metric: 'Median cost 0.4 ms per request',
+      metric: 'Median cost 0.2 s per request',
     },
     {
       numeral: 'III',
@@ -139,7 +136,7 @@ export const policy = {
 export const jev = {
   eyebrow: 'JEV',
   title: 'JEV only reads the requests that need it.',
-  body: "JEV is Tessera's AI decision layer. Static analysis settles almost every request in under a millisecond; the few it cannot settle go to JEV, which returns a maliciousness score and the context behind it.",
+  body: "JEV is Tessera's AI decision layer. Static analysis settles almost every request in under 10 ms; the few it cannot settle go to JEV, which returns a maliciousness score and the context behind it.",
   points: [
     { title: 'Called on suspicion', description: 'Only requests a static check flags reach JEV. That is about 1% of traffic.' },
     { title: 'A score with reasons', description: 'Every verdict carries a maliciousness score and what triggered it.' },
@@ -184,7 +181,7 @@ export const pricing = {
       name: 'Hosted',
       blurb: 'For one application, run by Tessera.',
       // ponytail: yearly rate is a placeholder (two months free) — set the real one
-      price: { monthly: 29.99, yearly: 24.99 },
+      price: { monthly: 24.99, yearly: 19.99 },
       cta: 'Deploy Tessera',
       deploy: true,
       featured: true,
@@ -236,10 +233,6 @@ export const bento = {
 };
 
 export const footer = {
-  eyebrow: 'Demo',
-  title: 'Play with our simple demo.',
-  body: 'Pick a request and send it through the gate. Tessera scores it and hands back a ticket, the same way it would in front of your app.',
-  cta: 'Try the demo',
   playLabel: 'Send a request',
   verdicts: { passed: 'Request admitted', blocked: 'Request dropped', jev: 'Sent to JEV', review: 'Held for review' } satisfies Record<Verdict, string>,
   tagline: '© 2026',

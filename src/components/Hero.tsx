@@ -83,9 +83,6 @@ export function Hero({ onDeploy }: { onDeploy: () => void }) {
           <Button size="lg" iconRight={ArrowRight} onClick={onDeploy}>
             {hero.primary}
           </Button>
-          <Button size="lg" variant="outline" onClick={() => (window.location.hash = '#demo')}>
-            {hero.secondary}
-          </Button>
         </div>
       </div>
 

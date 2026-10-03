@@ -37,21 +37,6 @@ export function Header({ onDeploy }: { onDeploy: () => void }) {
       <NavPill aria-label="Main" items={header.nav} active={active} onSelect={setActive} className="max-md:hidden" />
       <span className="md:hidden" />
 
-      <div className="flex justify-end items-center gap-2">
-        <Button variant="secondary" size="sm" onClick={onDeploy}>
-          {header.deploy}
-        </Button>
-        <IconButton
-          icon={open ? X : Menu}
-          label={open ? header.closeMenu : header.menu}
-          size="lg"
-          aria-expanded={open}
-          aria-controls={sheetId}
-          onClick={() => setOpen((o) => !o)}
-          className="md:hidden -mr-2"
-        />
-      </div>
-
       <nav
         id={sheetId}
         aria-label="Main"
