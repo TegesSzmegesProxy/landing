@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { MotionConfig } from 'motion/react';
 import { skipLink } from './data/content';
 import { Bento } from './components/Bento';
+import { DemoPage } from './components/demo/DemoPage';
 import { DeployDialog } from './components/DeployDialog';
 import { Flow } from './components/Flow';
 import { Footer } from './components/Footer';
@@ -30,10 +31,11 @@ export default function App() {
         <Flow />
         <PolicySection />
         <Jev />
+        <DemoPage onDeploy={openDeploy} />
         <Bento />
         <Pricing onDeploy={openDeploy} />
       </main>
-      <Footer onDeploy={openDeploy} />
+      <Footer />
       <DeployDialog open={deployOpen} onClose={closeDeploy} />
     </MotionConfig>
   );
