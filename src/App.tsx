@@ -7,7 +7,9 @@ import { Flow } from './components/Flow';
 import { Footer } from './components/Footer';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
+import { Jev } from './components/Jev';
 import { PolicySection } from './components/PolicySection';
+import { Pricing } from './components/Pricing';
 
 export default function App() {
   const [deployOpen, setDeployOpen] = useState(false);
@@ -27,7 +29,9 @@ export default function App() {
         <Hero onDeploy={openDeploy} />
         <Flow />
         <PolicySection />
+        <Jev />
         <Bento />
+        <Pricing onDeploy={openDeploy} />
       </main>
       <Footer onDeploy={openDeploy} />
       <DeployDialog open={deployOpen} onClose={closeDeploy} />
