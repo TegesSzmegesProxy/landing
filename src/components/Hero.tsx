@@ -97,20 +97,20 @@ export function Hero({ onDeploy }: { onDeploy: () => void }) {
             className="absolute left-1/2 top-[14%] size-[560px] -ml-[280px] rounded-full z-0 pointer-events-none bg-[radial-gradient(closest-side,rgba(247,243,235,.95),rgba(247,243,235,0))]"
           />
           <motion.img
-            src="/pixel/hero-amphitheatre-day.png"
+            src={`${import.meta.env.BASE_URL}pixel/hero-amphitheatre-day.png`}
             alt=""
             width={384}
             height={216}
             style={m.img}
             className="relative z-[1] block w-full pixelated will-change-transform pointer-events-none origin-[50%_100%]"
           />
-          <motion.img src="/pixel/cloud.png" alt="" style={m.c2} className={cn(layer, 'top-[4%] w-[240px] max-w-none opacity-85 z-[2]')} />
-          <motion.img src="/pixel/cloud.png" alt="" style={m.c1} className={cn(layer, 'top-[16%] w-[360px] max-w-none z-[2]')} />
-          <motion.img src="/pixel/cloud.png" alt="" style={m.c3} className={cn(layer, 'top-[30%] w-[180px] max-w-none opacity-90 z-[3]')} />
+          <motion.img src={`${import.meta.env.BASE_URL}pixel/cloud.png`} alt="" style={m.c2} className={cn(layer, 'top-[4%] w-[240px] max-w-none opacity-85 z-[2]')} />
+          <motion.img src={`${import.meta.env.BASE_URL}pixel/cloud.png`} alt="" style={m.c1} className={cn(layer, 'top-[16%] w-[360px] max-w-none z-[2]')} />
+          <motion.img src={`${import.meta.env.BASE_URL}pixel/cloud.png`} alt="" style={m.c3} className={cn(layer, 'top-[30%] w-[180px] max-w-none opacity-90 z-[3]')} />
           <motion.div aria-hidden style={m.birds} className={cn(layer, 'top-[10%] w-[84px] z-[3] flex gap-[22px] items-start')}>
-            <img src="/pixel/bird-a.png" alt="" className="w-7 max-w-none pixelated" />
-            <img src="/pixel/bird-b.png" alt="" className="w-7 max-w-none mt-3.5 pixelated" />
-            <img src="/pixel/bird-a.png" alt="" className="w-5 max-w-none mt-1 pixelated" />
+            <img src={`${import.meta.env.BASE_URL}pixel/bird-a.png`} alt="" className="w-7 max-w-none pixelated" />
+            <img src={`${import.meta.env.BASE_URL}pixel/bird-b.png`} alt="" className="w-7 max-w-none mt-3.5 pixelated" />
+            <img src={`${import.meta.env.BASE_URL}pixel/bird-a.png`} alt="" className="w-5 max-w-none mt-1 pixelated" />
           </motion.div>
         </div>
 

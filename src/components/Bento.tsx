@@ -29,7 +29,7 @@ export function Bento() {
   return (
     <section id="dashboard" aria-labelledby="dashboard-heading" className="theme-ink relative overflow-hidden bg-ink-900">
       <img
-        src="/pixel/hero-amphitheatre-night.png"
+        src={`${import.meta.env.BASE_URL}pixel/hero-amphitheatre-night.png`}
         alt=""
         width={384}
         height={216}
