@@ -1,64 +1,85 @@
 import { demoModel, demoSteps, policyRules, tools } from '../data/demo';
-import type { DemoCheck, DemoNodeId, DemoResult, DemoSettings, DemoStep, FeedbackEndpoint, StepVariantKey, StepView } from '../types';
+import type { CheckStatus, DemoCheck, DemoNodeId, DemoResult, DemoSettings, DemoStep, FeedbackEndpoint, StaticVerdict, StepVariantKey, StepView } from '../types';
 
-const round2 = (v: number) => Math.round(v * 100) / 100;
+/** Aggregator priority from the contracts: ERROR > POLICY_VIOLATION > SUSPICIOUS > SAFE. */
+const PRIORITY: Array<[CheckStatus, StaticVerdict]> = [
+  ['error', 'ERROR'],
+  ['violation', 'POLICY_VIOLATION'],
+  ['suspicious', 'SUSPICIOUS'],
+];
 
-/** Tools → suspicion → JEV → verdict → feedback, all from the visitor's three choices. */
+/** Tools → static verdict → sampling → JEV → decision → feedback, all from the visitor's three choices. */
 export function evaluate({ scenario, rules, threshold }: DemoSettings, feedbackRows: FeedbackEndpoint[]): DemoResult {
   const attack = scenario === 'attack';
 
   const checks: DemoCheck[] = tools.map((t) => {
     const base = { id: t.id, name: t.name, hint: t.hint };
-    if (!t.runs) return { ...base, status: 'na', detail: t.skipReason ?? 'n/a', signal: 0 };
-    if (!attack) return { ...base, ...t.benign, signal: 0 };
-    if (!t.needs) return { ...base, ...t.attack, signal: t.signal ?? 0 };
+    if (!t.runs) return { ...base, status: 'na', detail: t.skipReason ?? 'n/a', evidence: 0 };
+    if (!attack) return { ...base, ...t.benign, evidence: 0 };
+    if (!t.needs) return { ...base, ...t.attack, evidence: t.evidence ?? 0 };
 
     const live = policyRules.filter((r) => t.needs?.includes(r.id) && rules[r.id]);
-    if (!live.length) return { ...base, status: 'pass', detail: 'no rule covers this, so nothing was flagged', signal: 0 };
-    return {
-      ...base,
-      status: t.attack.status,
-      detail: live.find((r) => r.finding)?.finding ?? t.attack.detail,
-      signal: live.reduce((sum, r) => sum + r.signal, 0),
-    };
+    if (!live.length) return { ...base, status: 'safe', detail: t.uncovered ?? t.benign.detail, evidence: 0 };
+    return { ...base, status: t.attack.status, detail: live.find((r) => r.finding)?.finding ?? t.attack.detail, evidence: t.evidence ?? 0 };
   });
 
-  const suspicion = round2(Math.min(1, checks.reduce((sum, c) => sum + c.signal, 0)));
-  const level = suspicion >= 0.6 ? 'high' : suspicion >= demoModel.gate ? 'elevated' : 'low';
+  const staticVerdict = PRIORITY.find(([s]) => checks.some((c) => c.status === s))?.[1] ?? 'SAFE';
 
-  const reason = suspicion >= demoModel.gate ? 'suspicious' : attack && rules.riskHigh ? 'sampled' : 'skipped';
-  const called = reason !== 'skipped';
+  // Only SAFE requests are sampled; SUSPICIOUS always goes to JEV; POLICY_VIOLATION never does.
+  const { minN, riskMinN, maxN, draw: draws } = demoModel.sampling;
+  const floorN = rules.riskHigh ? riskMinN : minN;
+  const draw = draws[scenario];
+  const path =
+    staticVerdict === 'POLICY_VIOLATION' ? 'violation' : staticVerdict === 'SUSPICIOUS' ? 'suspicious' : draw < floorN ? 'sampled' : 'skipped';
+  const called = path === 'suspicious' || path === 'sampled';
 
-  const k = Math.min(1, suspicion / demoModel.fullSignal);
-  const { floor, span, confFloor, confSpan } = demoModel.jev;
-  const score = called ? round2(floor + span * k) : 0;
-  const confidence = called ? round2(confFloor + confSpan * k) : 0;
-  const tier = score >= 0.85 ? 'high' : score >= 0.5 ? 'mid' : 'low';
+  const base = attack ? demoModel.jev.attack : demoModel.jev.benign;
+  const evidence = checks.reduce((sum, c) => sum + c.evidence, 0);
+  const score = attack && evidence < 0.2 ? 5 : base.score;
+  const confidence = Math.min(0.99, Math.round((base.confidence + (attack ? evidence : 0)) * 100) / 100);
+  const jevVerdict = score > demoModel.scoreThreshold ? 'ATTACK' : 'BENIGN';
+  const tier = !attack ? 'low' : confidence > 0.9 ? 'high' : 'mid';
 
-  const verdict = called && score >= threshold ? 'block' : 'allow';
+  const isAttack = called && score > demoModel.scoreThreshold && confidence > threshold;
+  const verdict = path === 'violation' || isAttack ? 'block' : 'allow';
+  const reason =
+    path === 'violation'
+      ? 'POLICY_VIOLATION · blocked by static analysis, JEV not needed'
+      : path === 'skipped'
+        ? `SAFE, not sampled (draw ${draw.toFixed(2)} ≥ N ${floorN.toFixed(2)})`
+        : isAttack
+          ? `JEV ATTACK · score ${score} > ${demoModel.scoreThreshold} and confidence ${confidence.toFixed(2)} > ${threshold.toFixed(2)}`
+          : jevVerdict === 'ATTACK'
+            ? `JEV score ${score} > ${demoModel.scoreThreshold}, but confidence ${confidence.toFixed(2)} ≤ ${threshold.toFixed(2)} → ALLOW`
+            : `JEV BENIGN · score ${score} ≤ ${demoModel.scoreThreshold}`;
 
-  // EWMA: the endpoint that was hit moves only when Tessera actually caught something.
-  const { alpha, floor: rateFloor, gain, quiet } = demoModel.ewma;
-  const target = demoModel.endpointOf[scenario];
-  const observed = attack && verdict === 'block' ? 1 : 0;
+  // EWMA of the endpoint attack rate → N. Only JEV classifications feed it; static blocks and unsampled requests do not.
+  const { up, down, quiet } = demoModel.ewma;
+  const toN = (rate: number) => floorN + (maxN - floorN) * rate;
   const feedback = feedbackRows.map(({ endpoint, seed }) => {
-    const isTarget = endpoint === target;
-    const series = [...seed];
-    let ewma = Math.max(0, (seed[seed.length - 1] - rateFloor) / gain);
+    const isTarget = endpoint === demoModel.endpoint;
+    if (!isTarget) return { endpoint, series: [...seed, ...Array(quiet + 1).fill(seed[seed.length - 1])], target: false };
+    const series = seed.map(() => toN(0));
+    let rate = 0;
     for (let i = 0; i <= quiet; i++) {
-      const x = isTarget && i === 0 ? observed : 0;
-      ewma = alpha * x + (1 - alpha) * ewma;
-      series.push(isTarget ? rateFloor + gain * ewma : seed[seed.length - 1]);
+      // this request's classification first, then quiet benign samples cooling it down
+      if (called) {
+        const x = i === 0 && jevVerdict === 'ATTACK' ? 1 : 0;
+        rate += (x > rate ? up : down) * (x - rate);
+      }
+      series.push(toN(rate));
     }
-    return { endpoint, series, target: isTarget };
+    return { endpoint, series, target: true };
   });
 
   return {
     checks,
-    suspicion,
-    level,
-    jev: { called, reason, score, confidence, tier },
+    staticVerdict,
+    path,
+    sampling: { n: floorN, draw },
+    jev: { called, verdict: jevVerdict, score, confidence, tier },
     verdict,
+    reason,
     missed: attack && verdict === 'allow',
     feedback,
   };
@@ -69,8 +90,9 @@ export function resolveStep(step: DemoStep, { scenario }: DemoSettings, result: 
   const keys: StepVariantKey[] = [];
   if (scenario === 'benign') keys.push('benign');
   if (!result.jev.called) keys.push('skipJev');
-  if (result.jev.reason === 'sampled') keys.push('sampled');
+  if (result.path === 'sampled') keys.push('sampled');
   keys.push(result.verdict);
+  if (result.path === 'violation') keys.push('violation');
 
   let view = { highlightNodes: step.highlightNodes, highlightEdges: step.highlightEdges, packet: step.packet, explain: step.explain, why: step.why };
   for (const key of keys) {

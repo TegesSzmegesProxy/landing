@@ -139,16 +139,16 @@ export interface PolicyRule {
   policy: string[];
   /** lines it contributes to the compiled toolchain */
   compiled: string[];
-  /** suspicion added when the rule fires on the attack */
-  signal: number;
-  /** what the malicious-input check reports when this rule is the one that fires */
+  /** what the owning tool reports when this rule is the one that fires */
   finding?: string;
 }
 
 /** A fixed line, or the slot where a rule's lines go (commented out while the rule is off). */
 export type TemplateLine = string | { rule: RuleId };
 
-export type CheckStatus = 'pass' | 'fail' | 'warn' | 'na';
+/** ToolResult verdicts from the architecture contracts; `na` = tool not selected. */
+export type CheckStatus = 'safe' | 'suspicious' | 'violation' | 'error' | 'na';
+export type StaticVerdict = 'SAFE' | 'SUSPICIOUS' | 'POLICY_VIOLATION' | 'ERROR';
 
 export interface ToolResult {
   status: CheckStatus;
@@ -164,8 +164,10 @@ export interface ToolSpec {
   skipReason?: string;
   /** the attack is only caught while one of these rules is on */
   needs?: RuleId[];
-  /** suspicion the attack adds when this check has no `needs` */
-  signal?: number;
+  /** a SUSPICIOUS finding that raises JEV confidence when it reaches JEV */
+  evidence?: number;
+  /** what the attack reports while none of `needs` is on */
+  uncovered?: string;
   attack: ToolResult;
   benign: ToolResult;
 }
@@ -192,21 +194,28 @@ export interface ApiEndpoint {
 
 export interface FeedbackEndpoint {
   endpoint: string;
-  /** sampling rate history before the request, 0–1 */
+  /** sampling probability N history before the request, 0–1 */
   seed: number[];
 }
 
 export interface DemoModel {
-  /** suspicion at or above which JEV is always called */
-  gate: number;
-  /** suspicion that maps to the full attack evidence */
-  fullSignal: number;
-  jev: { floor: number; span: number; confFloor: number; confSpan: number };
-  ewma: { alpha: number; floor: number; gain: number; quiet: number };
-  defaultThreshold: number;
-  thresholdRange: readonly [min: number, max: number, step: number];
-  endpointOf: Record<Scenario, string>;
+  endpoint: string;
+  /** JEV result counts as ATTACK only when score > this (fixed, never adapted) */
+  scoreThreshold: number;
+  /** user-set confidence threshold T and its slider range */
+  defaultConfidence: number;
+  confidenceRange: readonly [min: number, max: number, step: number];
+  /** SamplingConfig for the endpoint; `riskMinN` replaces `minN` while `risk: high` is on */
+  sampling: { minN: number; riskMinN: number; maxN: number; draw: Record<Scenario, number> };
+  /** asymmetric EWMA: rises fast, recovers slowly */
+  ewma: { up: number; down: number; quiet: number };
+  jev: {
+    attack: { score: JevScore; confidence: number };
+    benign: { score: JevScore; confidence: number };
+  };
 }
+
+export type JevScore = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type StepData =
   | { kind: 'tree'; title: string; lines: TerminalLine[] }
@@ -227,13 +236,13 @@ export type StepData =
   | { kind: 'runner' }
   | { kind: 'tools' }
   | { kind: 'aggregate' }
-  | { kind: 'sampling'; contrast: Record<Scenario, { request: string; path: string }> }
-  | { kind: 'jev'; context: string[]; rationale: { high: string; mid: string; low: string } }
+  | { kind: 'sampling' }
+  | { kind: 'jev'; context: Record<Scenario, string[]>; rationale: { high: string; mid: string; low: string } }
   | { kind: 'decision' }
   | { kind: 'feedback'; rows: FeedbackEndpoint[]; recapTitle: string; recap: string[]; cta: string };
 
 /** Which alternative view of a step applies, given the visitor's choices. */
-export type StepVariantKey = 'benign' | 'skipJev' | 'sampled' | 'block' | 'allow';
+export type StepVariantKey = 'benign' | 'skipJev' | 'sampled' | 'violation' | 'block' | 'allow';
 
 export interface StepView {
   highlightNodes: DemoNodeId[];
@@ -260,7 +269,7 @@ export interface DemoStep extends StepView {
 export interface DemoSettings {
   scenario: Scenario;
   rules: Record<RuleId, boolean>;
-  /** block at or above this maliciousness score */
+  /** JEV confidence threshold T */
   threshold: number;
 }
 
@@ -270,15 +279,18 @@ export interface DemoCheck {
   hint: string;
   status: CheckStatus;
   detail: string;
-  signal: number;
+  evidence: number;
 }
 
 export interface DemoResult {
   checks: DemoCheck[];
-  suspicion: number;
-  level: 'low' | 'elevated' | 'high';
-  jev: { called: boolean; reason: 'suspicious' | 'sampled' | 'skipped'; score: number; confidence: number; tier: 'high' | 'mid' | 'low' };
+  staticVerdict: StaticVerdict;
+  /** how the request left static analysis */
+  path: 'violation' | 'suspicious' | 'sampled' | 'skipped';
+  sampling: { n: number; draw: number };
+  jev: { called: boolean; verdict: 'ATTACK' | 'BENIGN'; score: JevScore; confidence: number; tier: 'high' | 'mid' | 'low' };
   verdict: 'block' | 'allow';
+  reason: string;
   /** the request was an attack and it was forwarded */
   missed: boolean;
   feedback: Array<{ endpoint: string; series: number[]; target: boolean }>;

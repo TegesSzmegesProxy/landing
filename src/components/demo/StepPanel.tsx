@@ -34,7 +34,7 @@ function Artifact({ step, ctx }: { step: DemoStep; ctx: DemoCtx }) {
     case 'aggregate':
       return <ChecksPanel mode={d.kind} ctx={ctx} />;
     case 'sampling':
-      return <SamplingPanel data={d} ctx={ctx} />;
+      return <SamplingPanel ctx={ctx} />;
     case 'jev':
       return <JevPanel data={d} ctx={ctx} />;
     case 'decision':

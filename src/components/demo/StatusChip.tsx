@@ -3,9 +3,10 @@ import type { BadgeStatus, CheckStatus } from '../../types';
 import { Badge } from '../ui/Badge';
 
 const MAP = {
-  pass: ['passed', Check, 'Pass'],
-  fail: ['blocked', X, 'Fail'],
-  warn: ['review', TriangleAlert, 'Warn'],
+  safe: ['passed', Check, 'Safe'],
+  suspicious: ['review', TriangleAlert, 'Suspicious'],
+  violation: ['blocked', X, 'Violation'],
+  error: ['blocked', X, 'Error'],
   na: ['neutral', Minus, 'n/a'],
 } as const satisfies Record<CheckStatus, readonly [BadgeStatus, unknown, string]>;
 

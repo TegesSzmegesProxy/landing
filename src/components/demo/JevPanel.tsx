@@ -1,39 +1,64 @@
 import { Quote } from 'lucide-react';
+import { demoModel } from '../../data/demo';
 import type { DemoCtx, StepData } from '../../types';
+import { Button } from '../ui/Button';
 import { Eyebrow } from '../Eyebrow';
 import { ScoreMeter } from '../ui/ScoreMeter';
 import { StatTile } from '../ui/StatTile';
 import { Rich } from './Rich';
 
-/** Step 13: what goes into JEV, and the score, confidence and reasoning that come out. */
+/** Step 13: what goes into JEV, and the classification, score and confidence that come out. */
 export function JevPanel({ data, ctx }: { data: Extract<StepData, { kind: 'jev' }>; ctx: DemoCtx }) {
-  const { jev, suspicion, checks } = ctx.result;
+  const { jev, path, staticVerdict, checks } = ctx.result;
 
   if (!jev.called) {
+    const violation = path === 'violation';
     return (
-      <div className="rounded-md border border-(--border-default) bg-bone-50 p-4 text-[14px] text-body">
-        JEV was not called for this request. No model call, no added latency, no AI cost.
+      <div className="flex flex-col gap-3 rounded-md border border-(--border-default) bg-bone-50 p-4 text-[14px] text-body">
+        <p className="m-0">
+          {violation
+            ? 'JEV was not called: the request was already blocked as a POLICY_VIOLATION.'
+            : 'JEV was not called for this request. No model call, no added latency, no AI cost.'}
+        </p>
+        {violation && (
+          <div>
+            <p className="m-0 mb-3 text-[13px] text-muted">Switch off the two deny rules to see how JEV judges the same payload.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                ctx.setRule('serializedObject', false);
+                ctx.setRule('classAllowList', false);
+              }}
+            >
+              Turn off deny rules
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
 
-  const flagged = checks.filter((c) => c.status === 'fail' || c.status === 'warn').length;
+  const flagged = checks.filter((c) => c.status === 'suspicious').map((c) => c.name);
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Eyebrow>In</Eyebrow>
+        <Eyebrow>JevInput</Eyebrow>
         <ul className="m-0 mt-2 p-0 list-none text-[13px] text-body grid gap-1.5">
           <li>
-            <span className="text-ink-900 font-medium">Request</span> · POST /adminer/, canonical form
+            <span className="text-ink-900 font-medium">requestContext</span> · {demoModel.endpoint}, canonical fields
           </li>
           <li>
-            <span className="text-ink-900 font-medium">Static evidence</span> · suspicion {suspicion.toFixed(2)}, {flagged} flagged{' '}
-            {flagged === 1 ? 'check' : 'checks'}
+            <span className="text-ink-900 font-medium">staticEvidence</span> · {staticVerdict}
+            {flagged.length ? ` (${flagged.join(', ')})` : ''}
           </li>
           <li>
-            <span className="text-ink-900 font-medium">Recent context</span>
+            <span className="text-ink-900 font-medium">policyVersion</span> · 7f3c2a1
+          </li>
+          <li>
+            <span className="text-ink-900 font-medium">recentRequests</span>
             <ul className="m-0 mt-1 pl-4 font-mono text-[12px] text-muted">
-              {data.context.map((c) => (
+              {data.context[ctx.scenario].map((c) => (
                 <li key={c}>{c}</li>
               ))}
             </ul>
@@ -42,12 +67,13 @@ export function JevPanel({ data, ctx }: { data: Extract<StepData, { kind: 'jev' 
       </div>
 
       <div>
-        <Eyebrow>Out</Eyebrow>
-        <div className="mt-2 grid grid-cols-2 gap-3">
-          <StatTile label="Maliciousness" value={jev.score.toFixed(2)} className="p-4" />
+        <Eyebrow>JevResult</Eyebrow>
+        <div className="mt-2 grid grid-cols-3 gap-3">
+          <StatTile label="Verdict" value={jev.verdict} className="p-4" />
+          <StatTile label="Score" value={`${jev.score}/6`} className="p-4" />
           <StatTile label="Confidence" value={jev.confidence.toFixed(2)} className="p-4" />
         </div>
-        <ScoreMeter score={jev.score} threshold={ctx.threshold} label={null} showValue={false} tiles={24} className="mt-3" />
+        <ScoreMeter score={jev.score / 6} threshold={demoModel.scoreThreshold / 6} label={null} showValue={false} tiles={24} className="mt-3" />
       </div>
 
       <figure className="m-0 flex gap-3 rounded-md border border-(--border-default) bg-bone-50 p-4">

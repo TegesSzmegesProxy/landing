@@ -20,8 +20,8 @@ export const header = {
     { label: 'How it works', href: '#how-it-works' },
     { label: 'Policies', href: '#policies' },
     { label: 'JEV', href: '#jev' },
+    { label: 'Demo', href: '#demo' },
     { label: 'Pricing', href: '#pricing' },
-    { label: 'Docs' },
   ] satisfies NavItem[],
   closeMenu: 'Close menu',
 };

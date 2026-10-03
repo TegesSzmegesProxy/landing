@@ -6,25 +6,31 @@ import { cn } from '../../lib/cn';
 import { Badge } from '../ui/Badge';
 import { ScoreMeter } from '../ui/ScoreMeter';
 
-/** Step 14: score against a threshold the visitor can move; the verdict follows. */
+/** Step 14: JEV confidence against a threshold the visitor can move; the decision follows. */
 export function DecisionPanel({ ctx }: { ctx: DemoCtx }) {
   const id = useId();
-  const { jev, verdict, missed } = ctx.result;
-  const [min, max, step] = demoModel.thresholdRange;
+  const { jev, verdict, missed, reason, path } = ctx.result;
+  const [min, max, step] = demoModel.confidenceRange;
   const block = verdict === 'block';
 
   return (
     <div className="flex flex-col gap-4">
+      <p className="m-0 font-mono text-[12px] text-muted">
+        ATTACK ⇔ score &gt; {demoModel.scoreThreshold} &amp;&amp; confidence &gt; T
+      </p>
+
       {jev.called ? (
-        <ScoreMeter score={jev.score} threshold={ctx.threshold} label="Maliciousness" tiles={24} />
+        <ScoreMeter score={jev.confidence} threshold={ctx.threshold} label="Confidence" tiles={24} />
       ) : (
-        <p className="m-0 text-[14px] text-body">No JEV score on the cheap path, so the threshold is not consulted.</p>
+        <p className="m-0 text-[14px] text-body">
+          {path === 'violation' ? 'Blocked by static analysis, so the threshold is not consulted.' : 'No JEV result on the cheap path, so the threshold is not consulted.'}
+        </p>
       )}
 
       <div className={cn(!jev.called && 'opacity-50')}>
         <div className="flex items-baseline justify-between gap-3">
           <label htmlFor={id} className="font-mono text-[11px] tracking-[.08em] uppercase text-muted">
-            Block at or above
+            Confidence threshold T
           </label>
           <output htmlFor={id} className="font-mono text-[15px] text-ink-900 tabular-nums">
             {ctx.threshold.toFixed(2)}
@@ -48,11 +54,12 @@ export function DecisionPanel({ ctx }: { ctx: DemoCtx }) {
           {block ? <ShieldX size={18} strokeWidth={1.5} aria-hidden className="text-clay-600" /> : <ShieldCheck size={18} strokeWidth={1.5} aria-hidden className="text-verdigris-600" />}
           <span className="font-mono text-[15px] font-medium tracking-[.04em] text-ink-900">{block ? 'BLOCK' : 'ALLOW'}</span>
           <Badge status={block ? 'blocked' : 'passed'} dot={false}>
-            HTTP {block ? 403 : 200}
+            {block ? 'HTTP 403' : 'forwarded'}
           </Badge>
         </div>
+        <p className="m-0 mt-2 font-mono text-[12px] text-ink-900">{reason}</p>
         <p className="m-0 mt-2 text-[14px] text-ink-900">
-          {block ? 'Rejected at the proxy. The request never reaches Upstream.' : 'Forwarded to Upstream. Adminer handles it as usual.'}
+          {block ? 'Rejected at the proxy. The request never reaches Upstream.' : 'Forwarded unchanged to Upstream. Adminer handles it as usual.'}
         </p>
       </div>
 
@@ -60,8 +67,8 @@ export function DecisionPanel({ ctx }: { ctx: DemoCtx }) {
         <p className="m-0 flex items-start gap-2 text-[13px] text-body">
           <TriangleAlert size={16} strokeWidth={1.5} aria-hidden className="mt-0.5 shrink-0 text-ochre-600" />
           <span>
-            <strong className="font-medium text-ink-900">The attack got through.</strong>{' '}
-            {jev.called ? 'Lower the threshold, or' : 'The rules that would have flagged it are off. Go back to step 6 and'} turn the policy rules back on.
+            <strong className="font-medium text-ink-900">The attack got through.</strong> JEV called it an attack but not confidently enough. Lower T, or go back to
+            step 6 and turn the policy rules back on.
           </span>
         </p>
       )}

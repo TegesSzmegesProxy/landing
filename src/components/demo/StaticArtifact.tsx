@@ -99,7 +99,7 @@ export function StaticArtifact({ data, ctx }: { data: Extract<StepData, { kind: 
     case 'normalize': {
       const v = data.variants[ctx.scenario];
       const on = policyRules.filter((r) => ctx.rules[r.id]).length;
-      const rules = ctx.scenario === 'attack' ? `${on} of ${policyRules.length} rules on` : 'low risk';
+      const rules = `${on} of ${policyRules.length} rules on`;
       return (
         <div className="flex flex-col gap-3">
           <Terminal title="before" lines={v.before.map((text) => ({ kind: 'comment' as const, text }))} highlight={false} />
