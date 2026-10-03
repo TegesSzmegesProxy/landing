@@ -23,7 +23,7 @@ export const header = {
     { label: 'Pricing', href: '#pricing' },
     { label: 'Docs' },
   ] satisfies NavItem[],
-  deploy: 'Demo',
+  deploy: 'Deploy',
   menu: 'Menu',
   closeMenu: 'Close menu',
 };
@@ -33,7 +33,7 @@ export const hero = {
   title: 'Application-specific protection without the runtime overhead.',
   body: 'Tessera sits between your application and the rest of the world. It writes its policy from your code, checks every request, and asks JEV only when something looks wrong.',
   primary: 'Deploy Tessera',
-  secondary: 'Read the docs',
+  secondary: 'Trace a request',
   gateLabel: 'Gate · live',
   samples: [
     { method: 'GET', path: '/api/orders', status: 'passed', score: 0.03 },
