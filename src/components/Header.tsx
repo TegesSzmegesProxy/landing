@@ -1,12 +1,9 @@
 import { useEffect, useId, useState } from 'react';
-import { Menu, X } from 'lucide-react';
 import { WORDMARK, header } from '../data/content';
 import { cn } from '../lib/cn';
-import { Button } from './ui/Button';
-import { IconButton } from './ui/IconButton';
 import { NavPill } from './ui/NavPill';
 
-export function Header({ onDeploy }: { onDeploy: () => void }) {
+export function Header() {
   const [active, setActive] = useState('');
   const [open, setOpen] = useState(false);
   const sheetId = useId();

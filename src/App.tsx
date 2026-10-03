@@ -24,7 +24,7 @@ export default function App() {
       >
         {skipLink}
       </a>
-      <Header onDeploy={openDeploy} />
+      <Header />
       <main id="main" tabIndex={-1} className="outline-none">
         <Hero onDeploy={openDeploy} />
         <Flow />
