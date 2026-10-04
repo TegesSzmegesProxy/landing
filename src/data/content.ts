@@ -178,15 +178,16 @@ export const pricing = {
     },
     {
       name: 'Hosted',
-      blurb: 'For one application, run by Tessera.',
+      blurb: 'For one application, run by Tessera. Plus your own API key for the analysis model.',
       // ponytail: yearly rate is a placeholder (two months free) — set the real one
-      price: { monthly: 24.99, yearly: 19.99 },
+      price: { monthly: 5.99, yearly: 4.99 },
       cta: 'Check demo',
       deploy: true,
       featured: true,
       features: [
         'Proxy hosted by Tessera, nothing to run',
         'Code analysis runs for you',
+        'Analysis model on your API key, usage billed by your provider',
         'JEV included, no keys to manage',
         'More requests analysed by JEV',
         'Sampling bounds and threshold settings',

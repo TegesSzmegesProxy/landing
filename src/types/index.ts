@@ -69,7 +69,7 @@ export interface PricingTier {
   /** replaces the billing line when the price does not depend on the period */
   note?: string;
   cta: string;
-  /** opens the Deploy dialog */
+  /** links to the dashboard */
   deploy?: boolean;
   featured?: boolean;
   features: string[];
