@@ -17,9 +17,12 @@ export const demoCopy = {
   id: 'demo',
   eyebrow: 'Demo',
   title: 'Trace one request through Tessera.',
-  body: 'Follow an attack on Adminer, CVE-2025-43960, from the collector in your CI to the 403 at the proxy. Edit the policy, swap the request, move the confidence threshold: the outcome changes with you.',
+  body: 'Follow an attack on Adminer, CVE-2025-43960, from the collector in your CI to the 403 at the proxy. Edit the policy, swap the request, move the attack probability threshold: the outcome changes with you.',
   note: 'Illustrative scenario with mocked data, modelled on the Tessera architecture. Nothing leaves your browser.',
   stepOf: (n: number, total: number) => `Step ${n} of ${total}`,
+  pageOf: (n: number, total: number) => `Page ${n} of ${total}`,
+  prevPage: 'Previous page',
+  nextPage: 'Next page',
   nodesLabel: 'Nodes in this step',
   prev: 'Previous',
   next: 'Next',
@@ -40,14 +43,14 @@ export const phases: Record<DemoPhase, { label: string; hint: string }> = {
 
 /** Plain-English definitions for `{{term}}` markers in step copy. */
 export const glossary: Record<string, string> = {
-  JEV: "Tessera's decision model. It gets the normalised request, the static evidence and the client's last 3 requests, and returns ATTACK or BENIGN with a maliciousness score from 1 to 6 and a confidence.",
-  EWMA: 'Exponentially weighted moving average: a running average that counts recent events more than old ones. Tessera makes it asymmetric, so it rises fast after an attack and cools down slowly.',
-  'signed bundle': 'The compiled policy and runtime config under one version, signed by the control plane (Ed25519). The proxy verifies it before use and keeps the last good one if the control plane is unreachable.',
-  collector: 'A CLI or CI step that runs in your environment. It checks out the release, redacts secrets and uploads only structured context.',
+  JEV: "Tessera's classification model, not a chatbot. It gets the endpoint, the field names, locations and values, file metadata and any static pattern matches. It answers one question, \"is this request an attack attempt?\", with a probability. Only that probability, compared with your threshold T, decides.",
+  EWMA: 'Exponentially weighted moving average: a running average that counts recent events more than old ones. Tessera makes it asymmetric (α 0.3 up, 0.02 down), so it rises fast after an attack and cools down slowly.',
+  'signed bundle': 'The compiled policy and runtime config under one version (tessera.bundle/v2), signed by the control plane with Ed25519. The proxy checks the signature and content hash before use and keeps the last good copy if the control plane is unreachable.',
+  collector: 'The tessera CLI, run in your CI or by hand. It scans your environment with Nmap, Nuclei, Trivy, httpx and Lynis, redacts the report and uploads it. It never uploads source code.',
   'magic bytes': 'The first few bytes of a file, which reveal its real type whatever its name says. Tessera checks them on uploads.',
   'PHP object injection': 'PHP can turn stored text back into live objects (unserialize). If an attacker controls that text, they choose which objects get built.',
   'reverse proxy': 'A server that sits in front of your app and receives requests on its behalf, then forwards the good ones.',
-  'Policy API': 'The hosted dashboard and admin API where admins approve, edit or import policies. Every change is a new version that is recompiled and approved before activation.',
+  'Policy API': 'The hosted dashboard and admin API where admins approve, reject, import or edit policies in plain language. Every change is a new immutable version that is recompiled and approved before activation, and the proxy picks it up on its next restart.',
 };
 
 /* ---------------------------------------------------------------------------
@@ -145,97 +148,101 @@ export const demoEdges: DemoEdge[] = [
    Policy, toolchain and checks
 --------------------------------------------------------------------------- */
 
+/** Each rule selects real tools from the proxy registry (tessera.tools/v2) or sets a real sampling override. */
 export const policyRules: PolicyRule[] = [
   {
-    id: 'serializedObject',
-    label: 'Deny serialized PHP objects in state',
-    plain: '`state` must never carry a PHP serialized object. A match is a policy violation.',
-    policy: ['      deny: php_serialized_object'],
-    compiled: ['  field    injection  state · deny php_serialized_object'],
-    finding: 'serialized PHP object in `state`',
+    id: 'statePattern',
+    label: 'Pin `state` to a token format',
+    plain: '`state` must match `^[A-Za-z0-9_-]{1,64}$`, the shape of a real Adminer token. Anything else is a policy violation.',
+    policy: ['          - regex_pattern: { pattern: "^[A-Za-z0-9_-]{1,64}$" }'],
+    compiled: ['  field  body.state         regex_pattern ^[A-Za-z0-9_-]{1,64}$'],
+    finding: '`state` does not match ^[A-Za-z0-9_-]{1,64}$',
   },
   {
-    id: 'classAllowList',
-    label: 'Deny Monolog\\Handler\\* classes',
-    plain: 'The logging handlers the CVE abuses can never appear in a field. A match is a policy violation.',
-    policy: ['      deny_classes: ["Monolog\\\\Handler\\\\*"]'],
-    compiled: ['  field    injection  state · deny_classes Monolog\\Handler\\*'],
-    finding: 'class `Monolog\\Handler\\BufferHandler` is denied',
+    id: 'stateLength',
+    label: 'Cap the length of `state`',
+    plain: 'A token is never longer than 64 characters. A longer `state` is a policy violation.',
+    policy: ['          - string_length: { length <= 64 }'],
+    compiled: ['  field  body.state         string_length ≤ 64'],
+    finding: '`state` is longer than 64 characters',
   },
   {
-    id: 'maxBody',
-    label: 'Cap body and declared sizes',
-    plain: 'Bodies over 64 kB, or values declaring sizes over 1 MB, are flagged as suspicious.',
-    policy: ['    max_body: 64kB', '    max_declared_size: 1MB'],
-    compiled: ['  request  resource   body ≤ 64 kB · declared size ≤ 1 MB'],
+    id: 'deserialization',
+    label: 'Scan `state` for serialized objects',
+    plain: 'Flags serialized Java, .NET, PHP, Python and YAML payloads as suspicious. JEV gets the match as a hint.',
+    policy: ['          - insecure_deserialization'],
+    compiled: ['  field  body.state         insecure_deserialization'],
+    finding: 'php_serialized_object in `state`',
   },
   {
-    id: 'riskHigh',
-    label: 'Mark the endpoint risk: high',
-    plain: 'Raises the sampling floor from 5% to 25%, so more SAFE requests are still checked by JEV.',
-    policy: ['  risk: high                # sampling minN 0.05 → 0.25'],
-    compiled: ['  sampling            minN 0.25 (risk: high)'],
+    id: 'samplingFloor',
+    label: 'Raise the sampling floor for this endpoint',
+    plain: 'An endpoint override lifts minN from 5% to 25%, so more SAFE requests are still checked by JEV.',
+    policy: ['  sampling: { minN: 0.25 }   # endpoint override'],
+    compiled: ['  sampling                  minN 0.25 (endpoint override)'],
   },
 ];
 
 export const defaultRules: Record<RuleId, boolean> = {
-  serializedObject: true,
-  classAllowList: true,
-  maxBody: true,
-  riskHigh: true,
+  statePattern: true,
+  stateLength: true,
+  deserialization: true,
+  samplingFloor: true,
 };
 
-/** Tool groups from the static-analysis reference: schema, injection, resource, url, anomaly, file. */
+/** Real tool ids from the proxy registry. 149 exist in 9 categories; the Runner runs only the ones the policy selects. */
 export const tools: ToolSpec[] = [
   {
-    id: 'schema',
-    name: 'schema',
-    hint: 'Field shape, type, requiredness and size.',
+    id: 'enum_validation',
+    name: 'enum_validation',
+    hint: 'schema · field value must be one of an allowed set.',
     runs: true,
-    attack: { status: 'safe', detail: '`auth[driver]` is in the enum, `state` is a string' },
-    benign: { status: 'safe', detail: '5 auth fields match the schema' },
+    attack: { status: 'safe', detail: '`auth[driver]` = server, in the allowed set' },
+    benign: { status: 'safe', detail: '`auth[driver]` = server, in the allowed set' },
   },
   {
-    id: 'injection',
-    name: 'injection',
-    hint: 'SQL, command, template, XSS, path and other malicious input.',
+    id: 'regex_pattern',
+    name: 'regex_pattern',
+    hint: 'schema · field must match a pattern; long values are rejected before matching.',
     runs: true,
-    needs: ['serializedObject', 'classAllowList'],
-    uncovered: 'no SQL, XSS, template or path shapes · no rule covers serialized objects',
-    attack: { status: 'violation', detail: 'serialized PHP object in `state`' },
-    benign: { status: 'safe', detail: 'no injection shapes' },
+    needs: ['statePattern'],
+    uncovered: 'not selected for `state`',
+    attack: { status: 'violation', detail: '`state` does not match the token pattern' },
+    benign: { status: 'na', detail: 'no `state` field, so this field tool does not run' },
   },
   {
-    id: 'resource',
-    name: 'resource',
-    hint: 'Sizes and counts that could exhaust the server.',
+    id: 'string_length',
+    name: 'string_length',
+    hint: 'schema · string length must satisfy a comparison.',
     runs: true,
-    needs: ['maxBody'],
-    evidence: 0.2,
-    uncovered: 'body is 412 bytes · no rule checks declared sizes',
-    attack: { status: 'suspicious', detail: '`bufferSize` declares 99,999,999 (limit 1 MB)' },
-    benign: { status: 'safe', detail: 'body is 96 bytes' },
+    needs: ['stateLength'],
+    uncovered: 'no length rule on `state`',
+    attack: { status: 'violation', detail: '`state` is longer than 64 characters' },
+    benign: { status: 'na', detail: 'no `state` field, so this field tool does not run' },
   },
   {
-    id: 'url',
-    name: 'url',
-    hint: 'URLs, protocols, hosts and ports the app has no reason to touch.',
+    id: 'insecure_deserialization',
+    name: 'insecure_deserialization',
+    hint: 'injection · serialized Java, .NET, PHP, Python or YAML objects.',
     runs: true,
-    attack: { status: 'safe', detail: 'no URLs in any field' },
-    benign: { status: 'safe', detail: 'no URLs in any field' },
+    needs: ['deserialization'],
+    evidence: 0.05,
+    uncovered: 'not selected for `state`',
+    attack: { status: 'suspicious', detail: 'php_serialized_object in `state`' },
+    benign: { status: 'safe', detail: 'no serialized objects' },
   },
   {
-    id: 'anomaly',
-    name: 'anomaly',
-    hint: 'Does the value look like what this field normally holds?',
+    id: 'xss',
+    name: 'xss',
+    hint: 'injection · script tags, event handlers and javascript: URLs, encoded or not.',
     runs: true,
-    attack: { status: 'suspicious', detail: '`state` reads like code, not a session token' },
-    benign: { status: 'safe', detail: 'values fit the login profile' },
+    attack: { status: 'safe', detail: 'no script shapes in any field' },
+    benign: { status: 'safe', detail: 'no script shapes in any field' },
   },
   {
-    id: 'file',
-    name: 'file · magic bytes',
-    hint: 'Does an uploaded file really have the type it claims?',
+    id: 'mime_type',
+    name: 'mime_type',
+    hint: 'file · upload type must be allowed and match its content.',
     runs: false,
     skipReason: 'No file fields on this endpoint',
     attack: { status: 'na', detail: 'n/a' },
@@ -245,13 +252,15 @@ export const tools: ToolSpec[] = [
 
 export const demoModel: DemoModel = {
   endpoint: 'POST /adminer/',
-  scoreThreshold: 3,
-  defaultConfidence: 0.8,
-  confidenceRange: [0.5, 0.99, 0.01],
+  defaultThreshold: 0.8,
+  thresholdFloor: 0.5,
+  // the proxy requires floor ≤ T < 1
+  thresholdRange: [0.5, 0.99, 0.01],
   // fixed draws so the demo is repeatable; the proxy uses secure randomness
-  sampling: { minN: 0.05, riskMinN: 0.25, maxN: 0.8, draw: { attack: 0.42, benign: 0.18 } },
-  ewma: { up: 0.3, down: 0.05, quiet: 5 },
-  jev: { attack: { score: 6, confidence: 0.74 }, benign: { score: 1, confidence: 0.96 } },
+  sampling: { minN: 0.05, overrideMinN: 0.25, maxN: 0.8, draw: { attack: 0.42, benign: 0.18 } },
+  // DEFAULT_ADAPTIVE_TUNING in the proxy
+  ewma: { up: 0.3, down: 0.02, quiet: 5, sensitivity: 5 },
+  jev: { attack: { attackProbability: 0.88, severity: 2 }, benign: { attackProbability: 0.03, severity: 0 } },
 };
 
 /* ---------------------------------------------------------------------------
@@ -259,56 +268,64 @@ export const demoModel: DemoModel = {
 --------------------------------------------------------------------------- */
 
 const policyTemplate: TemplateLine[] = [
-  'tenant: acme-app',
-  'endpoint: "POST /adminer/"',
-  '  jev_context: "Adminer login form; CVE-2025-43960 applies"',
-  '  sampling: { minN: 0.05, maxN: 0.80 }',
-  { rule: 'riskHigh' },
-  '  request:',
-  { rule: 'maxBody' },
-  '  fields:',
-  '    auth[driver]: { type: enum, values: [server, pgsql, sqlite, oracle, mssql] }',
-  '    auth[username]: { type: string, max: 64 }',
-  '    state:',
-  '      type: string',
-  { rule: 'serializedObject' },
-  { rule: 'classAllowList' },
+  'schema: tessera.policy/v2',
+  'endpoints:',
+  '  - method: POST',
+  '    path: /adminer/',
+  '    humanReadablePolicy: "Adminer login. CVE-2025-43960 applies; no patch."',
+  '    jevContext: "Login form. `state` is an opaque session token."',
+  '    requestTools: [request_size]',
+  '    fields:',
+  '      - name: auth[driver]   location: body   required: true',
+  '        tools: [enum_validation]',
+  '      - name: auth[username] location: body',
+  '        tools: [xss]',
+  '      - name: state          location: body',
+  '        tools:',
+  { rule: 'statePattern' },
+  { rule: 'stateLength' },
+  { rule: 'deserialization' },
+  '# runtime config, same signed bundle',
+  'sampling: { probabilityN: 0.05, minN: 0.05, maxN: 0.80 }',
+  { rule: 'samplingFloor' },
+  'jev: { attackProbabilityThreshold: 0.80, floor: 0.50 }',
 ];
 
 const toolchainTemplate: TemplateLine[] = [
   'POST /adminer/',
-  { rule: 'maxBody' },
-  '  request  url        all fields',
-  '  request  anomaly    profile adminer-login',
-  '  field    schema     6 fields',
-  '  field    injection  sqli, xss, template, path',
-  { rule: 'serializedObject' },
-  { rule: 'classAllowList' },
-  '  sampling            N ∈ [0.05, 0.80]',
-  { rule: 'riskHigh' },
+  '  full   request            request_size',
+  '  field  body.auth[driver]  enum_validation [server, pgsql, sqlite, oracle, mssql]',
+  '  field  body.auth[username] xss',
+  { rule: 'statePattern' },
+  { rule: 'stateLength' },
+  { rule: 'deserialization' },
+  '  sampling                  N ∈ [0.05, 0.80]',
+  { rule: 'samplingFloor' },
+  '  jev                       T 0.80 · floor 0.50',
 ];
 
 export const demoSteps: DemoStep[] = [
   {
     id: 'git',
     phase: 'learn',
-    title: 'The collector checks out the release',
+    title: 'Collect the environment, read the repository',
     highlightNodes: ['git'],
     highlightEdges: [],
     explain:
-      'Analysis starts in your CI, not on our servers. The Tessera {{collector}} checks out the exact commit, strips secrets and uploads a redacted context package to the control plane.',
-    why: 'Secrets and unredacted source never leave your network.',
+      'The {{collector}} runs in your CI and scans the environment, then uploads a redacted report. Source never travels with it: the control plane fetches the commit from your linked GitHub repository into a disposable sandbox with no network access.',
+    why: 'Secrets are redacted before anything leaves your network, and anything sent to the AI model is redacted again.',
     data: {
       kind: 'tree',
       title: 'collector · GitHub Actions',
       lines: [
-        { kind: 'cmd', text: 'tessera-collect --repo git@github.com:acme/app.git --commit 3f9c2ab' },
-        { kind: 'out', text: '✓ checkout  3f9c2ab · release v2.14.0' },
-        { kind: 'out', text: '✓ redact    .env, config/database.php · 4 secrets replaced' },
-        { kind: 'out', text: '✓ syft      SBOM · 61 packages' },
-        { kind: 'out', text: '✓ trivy     2 findings' },
+        { kind: 'cmd', text: 'tessera --analyze-env --project-id 66f1c0a2e4b9d3f7a8c1b2e3 --project-path .' },
         { kind: 'out', text: '✓ nmap      app.example.com · 80, 443 open' },
-        { kind: 'out', text: '↑ upload    context package · 1.8 MB · tenant acme-app' },
+        { kind: 'out', text: '✓ httpx     /adminer/ · 200 · Adminer 4.8.1' },
+        { kind: 'out', text: '✓ nuclei    1 finding' },
+        { kind: 'out', text: '✓ trivy     composer.lock · 2 findings' },
+        { kind: 'out', text: '✓ lynis     host hardening report' },
+        { kind: 'out', text: '↑ upload    redacted environment report · project acme-app' },
+        { kind: 'comment', text: '# control plane: github.com/acme/app @ 3f9c2ab → network-less sandbox' },
       ],
     },
   },
@@ -319,11 +336,11 @@ export const demoSteps: DemoStep[] = [
     highlightNodes: ['dependencies', 'git'],
     highlightEdges: ['git-dependencies'],
     packet: { from: 'git', to: 'dependencies' },
-    explain: 'Syft builds a software bill of materials from the lock file. Two packages matter later: Adminer itself and Monolog, the logging library.',
+    explain: 'Trivy scans the project directory and reads the lock file. Two packages matter later: Adminer itself and Monolog, the logging library.',
     why: 'You cannot match a vulnerability to software you have not inventoried.',
     data: {
       kind: 'deps',
-      source: 'Syft SBOM · composer.lock',
+      source: 'Trivy · composer.lock',
       rows: [
         { name: 'vrana/adminer', version: '4.8.1', note: 'database admin UI', flagged: true },
         { name: 'monolog/monolog', version: '3.5.0', note: 'logging, wired into Adminer', flagged: true },
@@ -339,14 +356,14 @@ export const demoSteps: DemoStep[] = [
     highlightNodes: ['environment'],
     highlightEdges: ['environment-cves'],
     explain:
-      'The collector also records how the app runs and what is exposed, from inside your network. Monolog is switched on, and Nmap finds /adminer/ reachable from the internet.',
+      'The collector also records how the app runs and what is exposed. Monolog is switched on, Nmap finds ports 80 and 443 open, and httpx finds /adminer/ answering without auth in front.',
     why: 'A flaw only matters if the vulnerable code is actually enabled and reachable.',
     data: {
       kind: 'env',
       rows: [
         { label: 'Runtime', value: 'PHP 8.1.27 · Apache 2.4.58 · php:8.1-apache' },
         { label: 'Monolog logging', value: 'enabled in config/logging.php', flagged: true },
-        { label: 'Exposure (Nmap)', value: '80, 443 open · /adminer/ public, no auth in front', flagged: true },
+        { label: 'Exposure (Nmap, httpx)', value: '80, 443 open · /adminer/ public, no auth in front', flagged: true },
         { label: 'Secrets', value: 'DB_PASSWORD, APP_KEY → [REDACTED] before upload' },
       ],
     },
@@ -373,7 +390,7 @@ export const demoSteps: DemoStep[] = [
         ['Patch', 'No official patch'],
       ],
       matches: ['vrana/adminer 4.8.1', 'Monolog enabled', '/adminer/ exposed'],
-      mitigation: 'Recommended mitigation: limit Monolog usage or filter classes. Tessera can filter them at the proxy.',
+      mitigation: 'Recommended mitigation: limit Monolog usage or filter classes. Tessera can reject the payload at the proxy.',
     },
   },
   {
@@ -383,7 +400,7 @@ export const demoSteps: DemoStep[] = [
     highlightNodes: ['apiSurface', 'git'],
     highlightEdges: ['git-apiSurface'],
     packet: { from: 'git', to: 'apiSurface' },
-    explain: 'In the control plane, an analysis model reads the redacted code and lists every endpoint (method + path) and the fields each one accepts.',
+    explain: 'Inside the sandbox, an analysis model reads the code and lists every endpoint (method + path) and the fields each one accepts. It sees only redacted content.',
     why: 'Anything outside the list, or oversized inside it, is already suspect.',
     data: {
       kind: 'api',
@@ -407,19 +424,19 @@ export const demoSteps: DemoStep[] = [
     highlightEdges: ['apiSurface-policyGen', 'cves-policyGen', 'policyGen-policyComp', 'policyComp-toolchainGen', 'toolchainGen-tools'],
     packet: { from: 'policyGen', to: 'tools' },
     explain:
-      'An LLM turns the analysis into a tenant-wide policy with rules per endpoint and per field. The compiler maps it onto registered tools only. After an admin approves it in the {{Policy API}}, the control plane ships it as a {{signed bundle}}.',
+      'An LLM turns the analysis into a policy with a plain-language statement, JEV context and tools for every endpoint and field. The compiler accepts only tools from the proxy registry, at the right scope. After an admin approves it in the {{Policy API}}, the control plane ships it as a {{signed bundle}}.',
     why: 'A patch for this CVE never shipped. A policy rule can block it today.',
     data: {
       kind: 'policy',
-      title: 'policy · structured · v7',
+      title: 'tessera.policy/v2 · version 7',
       template: policyTemplate,
-      toolchainTitle: 'bundle 7f3c2a1 · ed25519 signed',
+      toolchainTitle: 'tessera.bundle/v2 · 7f3c2a1 · ed25519',
       toolchain: toolchainTemplate,
       beats: [
-        'Policy generator (LLM) writes structured rules from the analysis',
-        'Compiler picks and configures registered tools, nothing else',
+        'Policy generator (LLM) writes the endpoint and field policies from the analysis',
+        'Compiler selects registered tools only, and rejects unknown or misplaced ones',
         'Admin approves, the control plane signs bundle 7f3c2a1',
-        'Proxy pulls and verifies it at startup',
+        'Proxy pulls it at startup and checks signature, hash and every tool id',
       ],
       editNote: 'Switch a rule off, as an admin would in the dashboard. In production each edit is a new version that is recompiled, approved and picked up on the next proxy restart; here it applies at once.',
     },
@@ -432,7 +449,7 @@ export const demoSteps: DemoStep[] = [
     highlightEdges: ['client-ingress'],
     packet: { from: 'client', to: 'ingress' },
     explain:
-      'Nginx sends every request to the Tessera proxy, a {{reverse proxy}} on your own server. It resolves the tenant from the host, acme-app, before anything reaches Adminer. This one is a login post carrying a forged object.',
+      'Nginx sends every request to the Tessera proxy, a {{reverse proxy}} on your own server (port 62197 by default). It matches the request to an endpoint in the active policy before anything reaches Adminer. This one is a login post carrying a forged object.',
     why: 'Nothing reaches your app without passing the same gate.',
     data: {
       kind: 'request',
@@ -470,7 +487,7 @@ export const demoSteps: DemoStep[] = [
     highlightEdges: ['ingress-normalizer', 'policyApi-normalizer'],
     packet: { from: 'ingress', to: 'normalizer' },
     explain:
-      'Encodings are undone so every tool sees one canonical request. The endpoint policy comes from the in-memory copy of the {{signed bundle}} verified at startup; the request path never calls the control plane.',
+      'The body and query are flattened into named fields (`body.state`, `query.q`) and the request gets a hash. The endpoint policy comes from the in-memory copy of the {{signed bundle}} verified at startup; the request path never calls the control plane.',
     why: 'Enforcement keeps working even if our control plane is down.',
     data: {
       kind: 'normalize',
@@ -514,19 +531,19 @@ export const demoSteps: DemoStep[] = [
     highlightEdges: ['normalizer-runner', 'policyConfig-runner'],
     packet: { from: 'normalizer', to: 'runner' },
     explain:
-      'Every request goes through static analysis, but not through every tool. The Runner reads the endpoint policy: request tools see the whole request, field tools see only their field.',
+      'Every request goes through static analysis, but not through every one of the 149 tools. The Runner reads the endpoint policy: full tools see the whole request, field tools see only their field, file tools only uploads.',
     why: 'Running only the relevant tools is what keeps the overhead low.',
     data: { kind: 'runner' },
   },
   {
     id: 'tools',
     phase: 'trace',
-    title: 'Tools run in parallel',
+    title: 'Tools run, one after another',
     highlightNodes: ['tools', 'runner'],
     highlightEdges: ['runner-tools'],
     packet: { from: 'runner', to: 'tools' },
     explain:
-      'Each tool sets its own verdict: SAFE, SUSPICIOUS or POLICY_VIOLATION, or ERROR if it crashes or times out. They are deterministic string and size tests, so this takes well under a millisecond.',
+      'Each tool sets its own verdict: SAFE, SUSPICIOUS or POLICY_VIOLATION, or ERROR if it cannot decide or throws. They are deterministic, synchronous checks with no network calls and no AI.',
     why: 'Most requests are settled right here, with no AI involved.',
     data: { kind: 'tools' },
   },
@@ -537,7 +554,7 @@ export const demoSteps: DemoStep[] = [
     highlightNodes: ['aggregator', 'tools'],
     highlightEdges: ['tools-aggregator'],
     packet: { from: 'tools', to: 'aggregator' },
-    explain: 'The Aggregator keeps the worst verdict, ERROR > POLICY_VIOLATION > SUSPICIOUS > SAFE, plus compact evidence for JEV.',
+    explain: 'The Aggregator keeps the worst verdict, ERROR > POLICY_VIOLATION > SUSPICIOUS > SAFE. SUSPICIOUS hits become pattern matches that JEV can check.',
     why: 'A policy violation ends here. It never needs AI.',
     data: { kind: 'aggregate' },
   },
@@ -554,7 +571,7 @@ export const demoSteps: DemoStep[] = [
     data: { kind: 'sampling' },
     alt: {
       sampled: {
-        explain: 'Static analysis found nothing, but this request drew below N, so it goes to {{JEV}} as a sample. `risk: high` raised the floor of N to 25%.',
+        explain: 'Static analysis found nothing, but this request drew below N, so it goes to {{JEV}} as a sample. The endpoint override raised the floor of N to 25%.',
       },
       skipJev: {
         explain: 'SAFE and not drawn into the sample, so it is allowed without a {{JEV}} call. No model latency, no AI cost.',
@@ -577,18 +594,18 @@ export const demoSteps: DemoStep[] = [
     highlightEdges: ['aggregator-jev', 'sampling-jev'],
     packet: { from: 'sampling', to: 'jev' },
     explain:
-      '{{JEV}} gets the minimum structured context: the canonical request, the static evidence, the endpoint’s policy context and the client’s last 3 requests. It returns a classification, a score from 1 to 6 and a confidence.',
-    why: 'It adds judgement exactly where rules alone are not sure.',
+      '{{JEV}} gets only what it needs: the endpoint, each field’s name, location and value, file metadata and any pattern matches. IPs, identifiers, headers and static verdicts are left out. It returns an attack probability, plus a severity (0 to 3) and a confidence for display.',
+    why: 'It adds judgement exactly where rules alone are not sure. Identical inputs hit a 24-hour verdict cache instead of the model.',
     data: {
       kind: 'jev',
       context: {
-        attack: ['203.0.113.9 · last 3 requests', 'GET /adminer/ → 200', 'GET /adminer/?server=db → 200', 'POST /adminer/ · short fields → 200'],
-        benign: ['198.51.100.24 · last 3 requests', 'GET /adminer/ → 200', 'GET /adminer/?file=default.css → 200'],
+        attack: ['body.auth[driver] = "server"', 'body.state = \'O:37:"Monolog\\Handler\\BufferHandler":4:{…\''],
+        benign: ['body.auth[driver] = "server"', 'body.auth[server] = "db"', 'body.auth[username] = "root"', 'body.auth[password] = "••••••"'],
       },
       rationale: {
         high: 'Untrusted serialized data targets a Monolog handler with an inflated buffer size, on an endpoint affected by CVE-2025-43960.',
-        mid: '`state` holds an object-shaped value this field never normally carries. Likely hostile, but with a single anomaly the evidence is thin.',
-        low: 'An ordinary Adminer login. Fields match the schema, and the recent history is a normal page load.',
+        mid: '`state` holds an object-shaped value where a plain token is expected. Likely hostile, though no static check flagged it.',
+        low: 'An ordinary Adminer login. Every value is plausible input for this endpoint.',
       },
     },
     alt: {
@@ -614,8 +631,8 @@ export const demoSteps: DemoStep[] = [
     highlightEdges: ['jev-decision', 'decision-upstream', 'policyConfig-decision'],
     packet: { from: 'jev', to: 'upstream' },
     explain:
-      'Decision orchestration combines the static verdict, sampling and the JEV result. JEV blocks only when score > 3 and confidence > T. Only ALLOW reaches Upstream; BLOCK gets HTTP 403.',
-    why: 'T is yours. It can be locked, and adaptation may only tighten it, never loosen it.',
+      'Decision orchestration combines the static verdict, sampling and the JEV result. JEV blocks only when the attack probability is strictly above T. Only ALLOW reaches Upstream; BLOCK gets HTTP 403 with just a request id.',
+    why: 'T is yours. Under attack it tightens toward the floor you set, never past it, and you can lock it.',
     data: { kind: 'decision' },
     alt: {
       skipJev: {
@@ -644,7 +661,7 @@ export const demoSteps: DemoStep[] = [
     highlightEdges: ['decision-sampler', 'decision-metrics', 'decision-threshold', 'sampler-sampling'],
     packet: { from: 'decision', to: 'sampler' },
     explain:
-      'The JEV classification feeds the {{EWMA}} attack rate for this endpoint. It rises fast on ATTACK and cools slowly on BENIGN; the controller turns it into a new N between minN and maxN.',
+      'The JEV classification feeds the {{EWMA}} attack rate for this endpoint and tenant. It rises fast on ATTACK and cools slowly on BENIGN; the controller turns it into N = minN + (maxN − minN)(1 − e^(−5s)), always between your bounds.',
     why: 'Security, latency and AI cost are balanced continuously, inside the bounds you set.',
     data: {
       kind: 'feedback',
@@ -655,7 +672,7 @@ export const demoSteps: DemoStep[] = [
       ],
       recapTitle: 'What you just traced',
       recap: [
-        'A collector in your CI redacts secrets and uploads context; the control plane analyses it.',
+        'A collector in your CI uploads a redacted environment report; the control plane reads your repository in a network-less sandbox.',
         'An LLM drafts a policy per endpoint and per field. It is compiled to registered tools, approved and signed.',
         'The proxy pulls the signed bundle at startup and enforces it locally, even if the control plane is down.',
         'Static analysis runs on every request. Policy violations are blocked without AI.',

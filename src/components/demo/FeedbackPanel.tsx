@@ -46,7 +46,7 @@ export function FeedbackPanel({ data, ctx }: { data: Extract<StepData, { kind: '
         {[
           ['Sampler', `${demoModel.endpoint} N = ${pct(after)}`],
           ['Metrics', `${verdict.toUpperCase()} · ${fed}`],
-          ['Threshold', `T ${ctx.threshold.toFixed(2)} · locked, tighten-only`],
+          ['Threshold', `T ${ctx.threshold.toFixed(2)} · floor ${demoModel.thresholdFloor.toFixed(2)} · tighten-only`],
         ].map(([k, v]) => (
           <div key={k} className="rounded-md border border-(--border-subtle) p-3">
             <dt className="font-mono text-[11px] tracking-[.08em] uppercase text-muted">{k}</dt>

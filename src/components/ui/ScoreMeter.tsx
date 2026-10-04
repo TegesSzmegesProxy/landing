@@ -14,11 +14,11 @@ export interface ScoreMeterProps {
   style?: CSSProperties;
 }
 
-/** JEV maliciousness score as a row of mosaic tiles (tesserae). Verdigris → ochre → clay past threshold. */
+/** JEV attack probability as a row of mosaic tiles (tesserae). Verdigris → ochre → clay past threshold. */
 export function ScoreMeter({
   score,
   tiles = 20,
-  label = 'Maliciousness',
+  label = 'Attack probability',
   showValue = true,
   threshold = 0.7,
   tone = 'light',

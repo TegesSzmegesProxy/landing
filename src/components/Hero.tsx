@@ -74,7 +74,6 @@ export function Hero({ onDeploy }: { onDeploy: () => void }) {
     <section id="top" className="relative overflow-hidden">
       <div className="relative z-[5] max-w-[980px] mx-auto px-6 pt-[72px] pb-14 text-center">
         <Eyebrow>{hero.eyebrow}</Eyebrow>
-        <p>All data on website is mock data from our previous calculations.</p>
         <h1 className="mt-5 font-sans text-[44px] lg:text-[76px] font-light leading-[1.04] tracking-[-0.035em] text-ink-900 text-balance">
           {hero.title}
         </h1>

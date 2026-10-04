@@ -26,36 +26,41 @@ export function evaluate({ scenario, rules, threshold }: DemoSettings, feedbackR
   const staticVerdict = PRIORITY.find(([s]) => checks.some((c) => c.status === s))?.[1] ?? 'SAFE';
 
   // Only SAFE requests are sampled; SUSPICIOUS always goes to JEV; POLICY_VIOLATION never does.
-  const { minN, riskMinN, maxN, draw: draws } = demoModel.sampling;
-  const floorN = rules.riskHigh ? riskMinN : minN;
+  const { minN, overrideMinN, maxN, draw: draws } = demoModel.sampling;
+  const floorN = rules.samplingFloor ? overrideMinN : minN;
   const draw = draws[scenario];
   const path =
     staticVerdict === 'POLICY_VIOLATION' ? 'violation' : staticVerdict === 'SUSPICIOUS' ? 'suspicious' : draw < floorN ? 'sampled' : 'skipped';
   const called = path === 'suspicious' || path === 'sampled';
 
+  // Pattern matches reach JEV as hints, so they raise the attack probability a little.
   const base = attack ? demoModel.jev.attack : demoModel.jev.benign;
-  const evidence = checks.reduce((sum, c) => sum + c.evidence, 0);
-  const score = attack && evidence < 0.2 ? 5 : base.score;
-  const confidence = Math.min(0.99, Math.round((base.confidence + (attack ? evidence : 0)) * 100) / 100);
-  const jevVerdict = score > demoModel.scoreThreshold ? 'ATTACK' : 'BENIGN';
-  const tier = !attack ? 'low' : confidence > 0.9 ? 'high' : 'mid';
+  const evidence = attack ? checks.reduce((sum, c) => sum + c.evidence, 0) : 0;
+  const attackProbability = Math.min(0.99, Math.round((base.attackProbability + evidence) * 100) / 100);
+  const severity = base.severity;
+  // confidence is |2p - 1|, informational only
+  const confidence = Math.round(Math.abs(2 * attackProbability - 1) * 100) / 100;
+  // The tenant attack rate is 0 before this request, so the effective threshold equals T here.
+  const jevVerdict = attackProbability > threshold ? 'ATTACK' : 'BENIGN';
+  const tier = !attack ? 'low' : evidence > 0 ? 'high' : 'mid';
 
-  const isAttack = called && score > demoModel.scoreThreshold && confidence > threshold;
+  const isAttack = called && jevVerdict === 'ATTACK';
   const verdict = path === 'violation' || isAttack ? 'block' : 'allow';
+  const p = attackProbability.toFixed(2);
+  const t = threshold.toFixed(2);
   const reason =
     path === 'violation'
       ? 'POLICY_VIOLATION · blocked by static analysis, JEV not needed'
       : path === 'skipped'
         ? `SAFE, not sampled (draw ${draw.toFixed(2)} ≥ N ${floorN.toFixed(2)})`
         : isAttack
-          ? `JEV ATTACK · score ${score} > ${demoModel.scoreThreshold} and confidence ${confidence.toFixed(2)} > ${threshold.toFixed(2)}`
-          : jevVerdict === 'ATTACK'
-            ? `JEV score ${score} > ${demoModel.scoreThreshold}, but confidence ${confidence.toFixed(2)} ≤ ${threshold.toFixed(2)} → ALLOW`
-            : `JEV BENIGN · score ${score} ≤ ${demoModel.scoreThreshold}`;
+          ? `JEV ATTACK · attack probability ${p} > T ${t}`
+          : `JEV BENIGN · attack probability ${p} ≤ T ${t}`;
 
-  // EWMA of the endpoint attack rate → N. Only JEV classifications feed it; static blocks and unsampled requests do not.
-  const { up, down, quiet } = demoModel.ewma;
-  const toN = (rate: number) => floorN + (maxN - floorN) * rate;
+  // Asymmetric EWMA of the attack rate → N = minN + (maxN - minN)(1 - e^(-k·s)). Only JEV classifications feed it.
+  // With one endpoint and a fresh tenant, the endpoint and tenant rates move together, so s equals the rate.
+  const { up, down, quiet, sensitivity } = demoModel.ewma;
+  const toN = (rate: number) => floorN + (maxN - floorN) * (1 - Math.exp(-sensitivity * rate));
   const feedback = feedbackRows.map(({ endpoint, seed }) => {
     const isTarget = endpoint === demoModel.endpoint;
     if (!isTarget) return { endpoint, series: [...seed, ...Array(quiet + 1).fill(seed[seed.length - 1])], target: false };
@@ -77,7 +82,7 @@ export function evaluate({ scenario, rules, threshold }: DemoSettings, feedbackR
     staticVerdict,
     path,
     sampling: { n: floorN, draw },
-    jev: { called, verdict: jevVerdict, score, confidence, tier },
+    jev: { called, verdict: jevVerdict, attackProbability, severity, confidence, tier },
     verdict,
     reason,
     missed: attack && verdict === 'allow',

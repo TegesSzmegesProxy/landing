@@ -129,7 +129,7 @@ export interface PacketHop {
   to: DemoNodeId;
 }
 
-export type RuleId = 'serializedObject' | 'classAllowList' | 'maxBody' | 'riskHigh';
+export type RuleId = 'statePattern' | 'stateLength' | 'deserialization' | 'samplingFloor';
 
 export interface PolicyRule {
   id: RuleId;
@@ -164,7 +164,7 @@ export interface ToolSpec {
   skipReason?: string;
   /** the attack is only caught while one of these rules is on */
   needs?: RuleId[];
-  /** a SUSPICIOUS finding that raises JEV confidence when it reaches JEV */
+  /** a SUSPICIOUS finding JEV receives as a pattern match; raises the attack probability */
   evidence?: number;
   /** what the attack reports while none of `needs` is on */
   uncovered?: string;
@@ -200,22 +200,22 @@ export interface FeedbackEndpoint {
 
 export interface DemoModel {
   endpoint: string;
-  /** JEV result counts as ATTACK only when score > this (fixed, never adapted) */
-  scoreThreshold: number;
-  /** user-set confidence threshold T and its slider range */
-  defaultConfidence: number;
-  confidenceRange: readonly [min: number, max: number, step: number];
-  /** SamplingConfig for the endpoint; `riskMinN` replaces `minN` while `risk: high` is on */
-  sampling: { minN: number; riskMinN: number; maxN: number; draw: Record<Scenario, number> };
-  /** asymmetric EWMA: rises fast, recovers slowly */
-  ewma: { up: number; down: number; quiet: number };
+  /** user-set attack probability threshold T, its floor, and the slider range */
+  defaultThreshold: number;
+  thresholdFloor: number;
+  thresholdRange: readonly [min: number, max: number, step: number];
+  /** SamplingConfig for the endpoint; `overrideMinN` replaces `minN` while the endpoint override is on */
+  sampling: { minN: number; overrideMinN: number; maxN: number; draw: Record<Scenario, number> };
+  /** asymmetric EWMA (rises fast, recovers slowly) and the steepness of the saturating N curve */
+  ewma: { up: number; down: number; quiet: number; sensitivity: number };
   jev: {
-    attack: { score: JevScore; confidence: number };
-    benign: { score: JevScore; confidence: number };
+    attack: { attackProbability: number; severity: JevSeverity };
+    benign: { attackProbability: number; severity: JevSeverity };
   };
 }
 
-export type JevScore = 1 | 2 | 3 | 4 | 5 | 6;
+/** JEV severity rubric: 0 benign, 1 anomalous, 2 attack attempt, 3 critical. Display only. */
+export type JevSeverity = 0 | 1 | 2 | 3;
 
 export type StepData =
   | { kind: 'tree'; title: string; lines: TerminalLine[] }
@@ -269,7 +269,7 @@ export interface DemoStep extends StepView {
 export interface DemoSettings {
   scenario: Scenario;
   rules: Record<RuleId, boolean>;
-  /** JEV confidence threshold T */
+  /** JEV attack probability threshold T */
   threshold: number;
 }
 
@@ -288,7 +288,7 @@ export interface DemoResult {
   /** how the request left static analysis */
   path: 'violation' | 'suspicious' | 'sampled' | 'skipped';
   sampling: { n: number; draw: number };
-  jev: { called: boolean; verdict: 'ATTACK' | 'BENIGN'; score: JevScore; confidence: number; tier: 'high' | 'mid' | 'low' };
+  jev: { called: boolean; verdict: 'ATTACK' | 'BENIGN'; attackProbability: number; severity: JevSeverity; confidence: number; tier: 'high' | 'mid' | 'low' };
   verdict: 'block' | 'allow';
   reason: string;
   /** the request was an attack and it was forwarded */

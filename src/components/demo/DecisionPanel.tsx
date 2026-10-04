@@ -6,21 +6,19 @@ import { cn } from '../../lib/cn';
 import { Badge } from '../ui/Badge';
 import { ScoreMeter } from '../ui/ScoreMeter';
 
-/** Step 14: JEV confidence against a threshold the visitor can move; the decision follows. */
+/** Step 14: JEV attack probability against a threshold the visitor can move; the decision follows. */
 export function DecisionPanel({ ctx }: { ctx: DemoCtx }) {
   const id = useId();
   const { jev, verdict, missed, reason, path } = ctx.result;
-  const [min, max, step] = demoModel.confidenceRange;
+  const [min, max, step] = demoModel.thresholdRange;
   const block = verdict === 'block';
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="m-0 font-mono text-[12px] text-muted">
-        ATTACK ⇔ score &gt; {demoModel.scoreThreshold} &amp;&amp; confidence &gt; T
-      </p>
+      <p className="m-0 font-mono text-[12px] text-muted">ATTACK ⇔ attack probability &gt; T</p>
 
       {jev.called ? (
-        <ScoreMeter score={jev.confidence} threshold={ctx.threshold} label="Confidence" tiles={24} />
+        <ScoreMeter score={jev.attackProbability} threshold={ctx.threshold} label="Attack probability" tiles={24} />
       ) : (
         <p className="m-0 text-[14px] text-body">
           {path === 'violation' ? 'Blocked by static analysis, so the threshold is not consulted.' : 'No JEV result on the cheap path, so the threshold is not consulted.'}
@@ -30,7 +28,7 @@ export function DecisionPanel({ ctx }: { ctx: DemoCtx }) {
       <div className={cn(!jev.called && 'opacity-50')}>
         <div className="flex items-baseline justify-between gap-3">
           <label htmlFor={id} className="font-mono text-[11px] tracking-[.08em] uppercase text-muted">
-            Confidence threshold T
+            Attack probability threshold T
           </label>
           <output htmlFor={id} className="font-mono text-[15px] text-ink-900 tabular-nums">
             {ctx.threshold.toFixed(2)}
@@ -67,8 +65,9 @@ export function DecisionPanel({ ctx }: { ctx: DemoCtx }) {
         <p className="m-0 flex items-start gap-2 text-[13px] text-body">
           <TriangleAlert size={16} strokeWidth={1.5} aria-hidden className="mt-0.5 shrink-0 text-ochre-600" />
           <span>
-            <strong className="font-medium text-ink-900">The attack got through.</strong> JEV called it an attack but not confidently enough. Lower T, or go back to
-            step 6 and turn the policy rules back on.
+            <strong className="font-medium text-ink-900">The attack got through.</strong>{' '}
+            {jev.called ? 'Its attack probability did not exceed T. Lower T, or' : 'It was SAFE statically and not sampled. Go back to'} step 6 and turn the
+            policy rules back on.
           </span>
         </p>
       )}

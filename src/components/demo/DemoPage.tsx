@@ -34,7 +34,7 @@ const feedbackRows = demoSteps.flatMap((s) => (s.data.kind === 'feedback' ? s.da
 const clamp = (i: number) => Math.min(LAST, Math.max(0, i));
 
 function initial(step = 0): State {
-  return { step: clamp(step), playing: false, scenario: 'attack', rules: defaultRules, threshold: demoModel.defaultConfidence };
+  return { step: clamp(step), playing: false, scenario: 'attack', rules: defaultRules, threshold: demoModel.defaultThreshold };
 }
 
 function reduce(s: State, a: Action): State {
