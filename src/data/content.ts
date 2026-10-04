@@ -30,7 +30,7 @@ export const hero = {
   eyebrow: 'Adaptive security layer · reverse proxy',
   title: 'Application-specific protection with minimal runtime overhead',
   body: 'Tessera sits between your application and the rest of the world. It drafts a policy from your repository and environment, checks every request with deterministic tools, and asks JEV when something looks wrong.',
-  primary: 'Deploy Tessera',
+  primary: 'Check demo',
   gateLabel: 'Gate · live',
   samples: [
     { method: 'GET', path: '/api/orders', status: 'passed', score: 0.03 },
@@ -181,7 +181,7 @@ export const pricing = {
       blurb: 'For one application, run by Tessera.',
       // ponytail: yearly rate is a placeholder (two months free) — set the real one
       price: { monthly: 24.99, yearly: 19.99 },
-      cta: 'Deploy Tessera',
+      cta: 'Check demo',
       deploy: true,
       featured: true,
       features: [
@@ -312,16 +312,7 @@ export const footer = {
   ] satisfies FooterColumn[],
 };
 
-export const deploy = {
-  title: 'Deploy Tessera',
-  description: 'Link your repository and point Tessera at your origin. Nothing is enforced until you approve a policy and the proxy pulls its signed bundle.',
-  originLabel: 'Upstream origin',
-  originPlaceholder: 'https://app.internal:8080',
-  sourceLabel: 'Source',
-  sources: ['github.com/acme/storefront'],
-  cancel: 'Cancel',
-  submit: 'Generate policy',
-  close: 'Close',
-};
+// ponytail: placeholder until the dashboard is hosted, set the real URL here
+export const dashboardUrl = '#';
 
 export const skipLink = 'Skip to content';

@@ -1,9 +1,7 @@
-import { useCallback, useState } from 'react';
 import { MotionConfig } from 'motion/react';
-import { skipLink } from './data/content';
+import { dashboardUrl, skipLink } from './data/content';
 import { Bento } from './components/Bento';
 import { DemoPage } from './components/demo/DemoPage';
-import { DeployDialog } from './components/DeployDialog';
 import { Flow } from './components/Flow';
 import { Footer } from './components/Footer';
 import { Header } from './components/Header';
@@ -12,11 +10,9 @@ import { Jev } from './components/Jev';
 import { PolicySection } from './components/PolicySection';
 import { Pricing } from './components/Pricing';
 
-export default function App() {
-  const [deployOpen, setDeployOpen] = useState(false);
-  const openDeploy = useCallback(() => setDeployOpen(true), []);
-  const closeDeploy = useCallback(() => setDeployOpen(false), []);
+const openDeploy = () => window.location.assign(dashboardUrl);
 
+export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <a
@@ -36,7 +32,6 @@ export default function App() {
         <Pricing onDeploy={openDeploy} />
       </main>
       <Footer />
-      <DeployDialog open={deployOpen} onClose={closeDeploy} />
     </MotionConfig>
   );
 }
