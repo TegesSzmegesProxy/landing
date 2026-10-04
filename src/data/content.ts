@@ -309,7 +309,7 @@ export const footer = {
   columns: [
     { heading: 'Product', links: ['How it works', 'Policies', 'JEV', 'Pricing'] },
     { heading: 'Developers', links: ['Docs'] },
-    { heading: 'Company', links: ['Contact'] },
+    { heading: 'Company', links: ['Contact', "Github"] },
   ] satisfies FooterColumn[],
 };
 

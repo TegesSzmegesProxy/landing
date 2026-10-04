@@ -1,7 +1,7 @@
 import { WORDMARK, footer } from '../data/content';
 import { Eyebrow } from './Eyebrow';
 
-const ANCHORS: Record<string, string> = { 'How it works': '#how-it-works', Policies: '#policies', JEV: '#jev', Pricing: '#pricing' };
+const ANCHORS: Record<string, string> = { 'How it works': '#how-it-works', Policies: '#policies', JEV: '#jev', Pricing: '#pricing', Docs: 'https://tegesszmegesproxy.github.io/docs/', Github: 'https://github.com/TegesSzmegesProxy' };
 
 export function Footer() {
   return (
@@ -15,15 +15,20 @@ export function Footer() {
           {footer.columns.map((c) => (
             <nav key={c.heading} aria-label={c.heading}>
               <Eyebrow className="mb-3.5">{c.heading}</Eyebrow>
-              {c.links.map((l) => (
-                <a
-                  key={l}
-                  href={ANCHORS[l] ?? '#'}
-                  className="block font-sans text-[14px] leading-[2] max-md:leading-[44px] text-body no-underline hover:text-ink-900"
-                >
-                  {l}
-                </a>
-              ))}
+              {c.links.map((l) => {
+                const href = ANCHORS[l] ?? '#';
+                const isExternal = href.startsWith('http');
+                return (
+                  <a
+                    key={l}
+                    href={href}
+                    {...(isExternal && { target: '_blank', rel: 'noopener noreferrer' })}
+                    className="block font-sans text-[14px] leading-[2] max-md:leading-[44px] text-body no-underline hover:text-ink-900"
+                  >
+                    {l}
+                  </a>
+                );
+              })}
             </nav>
           ))}
         </div>
