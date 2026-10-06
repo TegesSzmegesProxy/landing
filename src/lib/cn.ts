@@ -2,5 +2,5 @@ export type ClassValue = string | false | null | undefined;
 
 /** Joins truthy class names. */
 export function cn(...classes: ClassValue[]): string {
-  return classes.filter(Boolean).join(' ');
+    return classes.filter(Boolean).join(" ");
 }
